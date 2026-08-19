@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">金正恩检测器</string>
+    <string name="accessibility_service_label">金正恩检测器</string>
+    <string name="accessibility_service_description">检测屏幕上出现的「金正恩」，自动把亮度调到最高并播放《你若三冬来》。</string>
+    <string name="title">金正恩检测器</string>
+    <string name="subtitle">检测到「金正恩」时：红圈圈出 + 震动 + 展示图片 + 播放《你若三冬来》+ 弹通知。</string>
+    <string name="btn_accessibility">打开无障碍设置</string>
+    <string name="btn_write_settings">授权修改系统设置</string>
+    <string name="btn_overlay">授权显示在其他应用上层</string>
+    <string name="btn_test">立即测试（模拟触发）</string>
+    <string name="hint">使用步骤：① 授权「修改系统设置」；② 授权「显示在其他应用上层」；③ 开启无障碍服务；④ 点测试按钮验证。注意：只检测屏幕文字，认不出图片/视频里的人脸。图片右上角 ✕ 可关闭，关闭后 BGM 也会停。</string>
+</resources>

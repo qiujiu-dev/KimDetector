@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.KimDetector" parent="Theme.AppCompat.DayNight.DarkActionBar" />
+</resources>
