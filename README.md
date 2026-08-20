@@ -22,7 +22,7 @@
 
 ##  安装
 
-仓库已附带成品 APK：`apk/KimDetector-v1.0.apk`（已签名，可直接安装）。
+仓库已附带成品 APK：`apk/KimDetector-v1.1.apk`（已签名，可直接安装）。
 
 1. 用 Android Studio 打开工程，连接手机直接运行
 2. 命令行打包：`gradlew.bat assembleRelease`，产物在 `app/build/outputs/apk/release/`

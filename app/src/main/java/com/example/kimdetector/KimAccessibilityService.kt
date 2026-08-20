@@ -5,8 +5,10 @@ import android.content.Intent
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import java.util.ArrayDeque
 
 class KimAccessibilityService : AccessibilityService() {
 
@@ -17,7 +19,11 @@ class KimAccessibilityService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val periodicScan = object : Runnable {
         override fun run() {
-            scan()
+            try {
+                scan()
+            } catch (t: Throwable) {
+                Log.e(TAG, "periodic scan error", t)
+            }
             mainHandler.postDelayed(this, PERIODIC_SCAN_INTERVAL_MS)
         }
     }
@@ -25,26 +31,33 @@ class KimAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        mainHandler.removeCallbacks(periodicScan)
         mainHandler.post(periodicScan)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null || event.packageName == packageName) return
+        if (event == null) return
+        try {
+            if (event.packageName == packageName) return
 
-        when (event.eventType) {
-            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
-                if (containsKeyword(event.text.joinToString(" "))) trigger(null)
-            }
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> scan()
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                val types = event.contentChangeTypes
-                if (types == AccessibilityEvent.CONTENT_CHANGE_TYPE_UNDEFINED ||
-                    types and AccessibilityEvent.CONTENT_CHANGE_TYPE_TEXT != 0
-                ) {
-                    scan()
+            when (event.eventType) {
+                AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
+                    val text = event.text?.joinToString(" ") ?: ""
+                    if (containsKeyword(text)) trigger(null)
+                }
+                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> scan()
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                    val types = event.contentChangeTypes
+                    if (types == AccessibilityEvent.CONTENT_CHANGE_TYPE_UNDEFINED ||
+                        types and AccessibilityEvent.CONTENT_CHANGE_TYPE_TEXT != 0
+                    ) {
+                        scan()
+                    }
                 }
             }
+        } catch (t: Throwable) {
+            Log.e(TAG, "onAccessibilityEvent error", t)
         }
     }
 
@@ -52,24 +65,49 @@ class KimAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         if (now - lastScan < SCAN_INTERVAL_MS) return
         lastScan = now
-        val root = rootInActiveWindow ?: return
+        val root = try {
+            rootInActiveWindow
+        } catch (t: Throwable) {
+            Log.e(TAG, "rootInActiveWindow error", t)
+            null
+        } ?: return
         val bounds = findKeyword(root)
         if (bounds != null) trigger(bounds)
     }
 
-    private fun findKeyword(node: AccessibilityNodeInfo): Rect? {
-        val text = node.text?.toString() ?: ""
-        val description = node.contentDescription?.toString() ?: ""
-        if (containsKeyword(text) || containsKeyword(description)) {
-            val bounds = Rect()
-            node.getBoundsInScreen(bounds)
-            return bounds
-        }
-
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val result = findKeyword(child)
-            if (result != null) return result
+    /** 迭代遍历，避免深树递归爆栈；单节点异常不影响整体。 */
+    private fun findKeyword(root: AccessibilityNodeInfo): Rect? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.poll() ?: continue
+            try {
+                val text = node.text?.toString() ?: ""
+                val description = node.contentDescription?.toString() ?: ""
+                if (containsKeyword(text) || containsKeyword(description)) {
+                    val bounds = Rect()
+                    node.getBoundsInScreen(bounds)
+                    while (queue.isNotEmpty()) {
+                        try {
+                            queue.poll()?.recycle()
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    return bounds
+                }
+                val count = node.childCount
+                for (i in 0 until count) {
+                    val child = node.getChild(i) ?: continue
+                    queue.add(child)
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "node access error", t)
+            } finally {
+                try {
+                    node.recycle()
+                } catch (_: Throwable) {
+                }
+            }
         }
         return null
     }
@@ -84,33 +122,52 @@ class KimAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         if (now - lastTrigger < TRIGGER_COOLDOWN_MS) return
         lastTrigger = now
-        KimTrigger.run(this, bounds)
+        try {
+            KimTrigger.run(this, bounds)
+        } catch (t: Throwable) {
+            Log.e(TAG, "trigger error", t)
+        }
     }
 
     fun closeOverlayAndStop() {
-        KimOverlay.dismiss(this)
-        KimTrigger.stopBgm(this)
+        try {
+            KimOverlay.dismiss(this)
+            KimTrigger.stopBgm(this)
+        } catch (t: Throwable) {
+            Log.e(TAG, "close overlay error", t)
+        }
     }
 
     override fun onInterrupt() {
-        KimOverlay.dismiss(this)
+        try {
+            KimOverlay.dismiss(this)
+        } catch (_: Throwable) {
+        }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         mainHandler.removeCallbacks(periodicScan)
         instance = null
-        KimOverlay.dismiss(this)
+        try {
+            KimOverlay.dismiss(this)
+        } catch (_: Throwable) {
+        }
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(periodicScan)
         instance = null
-        KimOverlay.dismiss(this)
+        try {
+            KimOverlay.dismiss(this)
+        } catch (_: Throwable) {
+        }
         super.onDestroy()
     }
 
     companion object {
+        const val TAG = "KimDetector"
+
         @Volatile
         var instance: KimAccessibilityService? = null
             private set

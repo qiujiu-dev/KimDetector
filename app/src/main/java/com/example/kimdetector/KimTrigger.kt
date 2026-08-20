@@ -14,11 +14,13 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 
 object KimTrigger {
 
+    private const val TAG = "KimDetector"
     private const val PREFS = "kim_prefs"
     private const val KEY_OLD_BRIGHTNESS = "old_brightness"
     private const val KEY_OLD_MODE = "old_mode"
@@ -30,45 +32,78 @@ object KimTrigger {
     private const val NOTIFY_ID = 2
 
     fun run(context: Context, bounds: Rect?) {
-        // 1. 亮度拉满（未授权时跳过，不影响其他功能）
-        if (!Settings.System.canWrite(context)) {
-            Toast.makeText(
-                context,
-                "未授权「修改系统设置」，亮度保持原样喵",
-                Toast.LENGTH_SHORT
-            ).show()
-        } else {
-            setMaxBrightness(context)
-        }
-
-        // 2. 红圈 + 图片悬浮窗
-        val service = KimAccessibilityService.instance
-        if (service != null && Settings.canDrawOverlays(context)) {
-            Handler(Looper.getMainLooper()).post {
-                KimOverlay.show(context, bounds, IMAGE_ASSET) {
-                    service.closeOverlayAndStop()
+        try {
+            // 1. 亮度（可选权限，异常不影响后续）
+            if (Settings.System.canWrite(context)) {
+                try {
+                    setMaxBrightness(context)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "brightness error", t)
                 }
+            } else {
+                toast(context, "未授权「修改系统设置」，亮度保持原样喵")
             }
-        } else if (!Settings.canDrawOverlays(context)) {
-            Toast.makeText(
-                context,
-                "请授权「显示在其他应用上层」，否则图片无法展示喵",
-                Toast.LENGTH_LONG
-            ).show()
+
+            // 2. 悬浮窗（红圈 + 图片 + 关闭按钮）
+            val service = KimAccessibilityService.instance
+            if (service != null && Settings.canDrawOverlays(context)) {
+                Handler(Looper.getMainLooper()).post {
+                    try {
+                        KimOverlay.show(context, bounds, IMAGE_ASSET) {
+                            service.closeOverlayAndStop()
+                        }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "overlay show error", t)
+                    }
+                }
+            } else if (!Settings.canDrawOverlays(context)) {
+                toast(context, "请授权「显示在其他应用上层」，否则图片无法展示喵")
+            }
+
+            // 3. 震动
+            vibrate(context)
+
+            // 4. BGM（前台服务被系统拒绝时降级为普通服务，不崩溃）
+            startMusic(context)
+
+            // 5. 通知
+            try {
+                postNotification(context)
+            } catch (t: Throwable) {
+                Log.e(TAG, "notification error", t)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "run error", t)
         }
-
-        // 3. 震动
-        vibrate(context)
-
-        // 4. BGM
-        context.startForegroundService(Intent(context, MusicService::class.java))
-
-        // 5. 通知
-        postNotification(context)
     }
 
     fun stopBgm(context: Context) {
-        MusicService.instance?.stopPlayback()
+        try {
+            MusicService.instance?.stopPlayback()
+        } catch (t: Throwable) {
+            Log.e(TAG, "stop bgm error", t)
+        }
+    }
+
+    private fun startMusic(context: Context) {
+        val intent = Intent(context, MusicService::class.java)
+        try {
+            context.startForegroundService(intent)
+        } catch (t: Throwable) {
+            Log.e(TAG, "startForegroundService failed, fallback to startService", t)
+            try {
+                context.startService(intent)
+            } catch (t2: Throwable) {
+                Log.e(TAG, "startService failed", t2)
+            }
+        }
+    }
+
+    private fun toast(context: Context, message: String) {
+        try {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        } catch (_: Throwable) {
+        }
     }
 
     fun setMaxBrightness(context: Context) {
@@ -124,27 +159,42 @@ object KimTrigger {
 
     private fun vibrate(context: Context) {
         try {
-            val pattern = longArrayOf(0, 700, 200, 700, 200, 700)
+            val pattern = longArrayOf(0, 600, 150, 600, 150, 600, 150, 800)
             val effect = VibrationEffect.createWaveform(pattern, -1)
+
             if (Build.VERSION.SDK_INT >= 31) {
                 val manager =
-                    context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                val vibrator = manager.defaultVibrator
-                if (vibrator.hasVibrator()) {
+                    context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                val vibrator = manager?.defaultVibrator
+                if (vibrator != null && vibrator.hasVibrator()) {
                     vibrator.vibrate(
                         effect,
                         VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
                     )
-                }
-            } else {
-                @Suppress("DEPRECATION")
-                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                if (vibrator.hasVibrator()) {
-                    vibrator.vibrate(effect)
+                    Log.i(TAG, "vibrate ok (VibratorManager)")
+                    return
                 }
             }
-        } catch (_: Exception) {
-            // 部分 ROM 会限制后台震动，忽略异常
+
+            @Suppress("DEPRECATION")
+            val legacy = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (legacy != null && legacy.hasVibrator()) {
+                try {
+                    legacy.vibrate(effect)
+                } catch (_: Throwable) {
+                    legacy.vibrate(600)
+                }
+                Log.i(TAG, "vibrate ok (legacy Vibrator)")
+            } else {
+                Log.w(TAG, "no vibrator available")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "vibrate error", t)
+            try {
+                @Suppress("DEPRECATION")
+                (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.vibrate(600)
+            } catch (_: Throwable) {
+            }
         }
     }
 

@@ -10,29 +10,41 @@ import android.content.pm.ServiceInfo
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 
 class MusicService : Service() {
 
+    private val tag = "KimDetector"
     private var mediaPlayer: MediaPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         createNotificationChannel()
-        startForegroundCompat()
+        try {
+            startForegroundCompat()
+        } catch (t: Throwable) {
+            Log.e(tag, "startForeground failed", t)
+            // 前台服务被拒也继续，至少不闪退
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopPlayback()
-            return START_NOT_STICKY
+        try {
+            if (intent?.action == ACTION_STOP) {
+                stopPlayback()
+                return START_NOT_STICKY
+            }
+            KimTrigger.setMaxBrightness(this)
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(NOTIFICATION_ID, buildNotification("亮度已拉满，正在播放《你若三冬来》…"))
+            playMusic()
+        } catch (t: Throwable) {
+            Log.e(tag, "onStartCommand error", t)
+            finishPrank()
         }
-        KimTrigger.setMaxBrightness(this)
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, buildNotification("亮度已拉满，正在播放《你若三冬来》…"))
-        playMusic()
         return START_NOT_STICKY
     }
 

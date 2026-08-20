@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.graphics.Rect
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -20,6 +21,7 @@ import android.widget.TextView
  */
 object KimOverlay {
 
+    private const val TAG = "KimDetector"
     private var windowManager: WindowManager? = null
     private var circleView: View? = null
     private var imageView: View? = null
@@ -54,8 +56,12 @@ object KimOverlay {
             lp.gravity = Gravity.TOP or Gravity.START
             lp.x = left
             lp.y = top
-            wm.addView(circle, lp)
-            circleView = circle
+            try {
+                wm.addView(circle, lp)
+                circleView = circle
+            } catch (t: Throwable) {
+                Log.e(TAG, "circle overlay error", t)
+            }
         }
 
         // 2) 图片悬浮窗（不可触摸，纯展示）
@@ -86,8 +92,12 @@ object KimOverlay {
             PixelFormat.TRANSLUCENT
         )
         imageLp.gravity = Gravity.CENTER
-        wm.addView(image, imageLp)
-        imageView = image
+        try {
+            wm.addView(image, imageLp)
+            imageView = image
+        } catch (t: Throwable) {
+            Log.e(TAG, "image overlay error", t)
+        }
 
         // 3) 右上角关闭按钮（独立可点击窗口，骑在图片右上角）
         val buttonSize = 64.dp(context)
@@ -111,8 +121,12 @@ object KimOverlay {
             .coerceIn(0, (screen.x - buttonSize).coerceAtLeast(0))
         closeLp.y = ((screen.y - imageH) / 2 - buttonSize / 2)
             .coerceIn(0, (screen.y - buttonSize).coerceAtLeast(0))
-        wm.addView(close, closeLp)
-        closeView = close
+        try {
+            wm.addView(close, closeLp)
+            closeView = close
+        } catch (t: Throwable) {
+            Log.e(TAG, "close button overlay error", t)
+        }
     }
 
     fun dismiss(context: Context) {
