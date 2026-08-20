@@ -75,24 +75,20 @@ class KimAccessibilityService : AccessibilityService() {
         if (bounds != null) trigger(bounds)
     }
 
-    /** 迭代遍历，避免深树递归爆栈；单节点异常不影响整体。 */
+    /** 迭代遍历，避免深树递归爆栈；单节点异常不影响整体。不手动 recycle，避免部分 ROM 上 double-recycle 的 native 崩溃。 */
     private fun findKeyword(root: AccessibilityNodeInfo): Rect? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
-        while (queue.isNotEmpty()) {
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_SCAN_NODES) {
             val node = queue.poll() ?: continue
+            visited++
             try {
                 val text = node.text?.toString() ?: ""
                 val description = node.contentDescription?.toString() ?: ""
                 if (containsKeyword(text) || containsKeyword(description)) {
                     val bounds = Rect()
                     node.getBoundsInScreen(bounds)
-                    while (queue.isNotEmpty()) {
-                        try {
-                            queue.poll()?.recycle()
-                        } catch (_: Throwable) {
-                        }
-                    }
                     return bounds
                 }
                 val count = node.childCount
@@ -102,11 +98,6 @@ class KimAccessibilityService : AccessibilityService() {
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "node access error", t)
-            } finally {
-                try {
-                    node.recycle()
-                } catch (_: Throwable) {
-                }
             }
         }
         return null
@@ -175,5 +166,6 @@ class KimAccessibilityService : AccessibilityService() {
         private const val SCAN_INTERVAL_MS = 300L
         private const val PERIODIC_SCAN_INTERVAL_MS = 1_000L
         private const val TRIGGER_COOLDOWN_MS = 3_000L
+        private const val MAX_SCAN_NODES = 3_000
     }
 }

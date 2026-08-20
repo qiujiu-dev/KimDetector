@@ -1,6 +1,7 @@
 package com.example.kimdetector
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -9,6 +10,8 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
+import java.io.File
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -48,6 +51,22 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btn_test).setOnClickListener {
             KimTrigger.run(this, null)
+        }
+        findViewById<Button>(R.id.btn_test_vibrate).setOnClickListener {
+            KimTrigger.vibrateNow(this)
+            Toast.makeText(this, "震动已触发，看看有没有感觉喵", Toast.LENGTH_SHORT).show()
+        }
+        findViewById<Button>(R.id.btn_crash_log).setOnClickListener {
+            val log = readCrashLog()
+            if (log.isBlank()) {
+                Toast.makeText(this, "暂无崩溃日志喵", Toast.LENGTH_SHORT).show()
+            } else {
+                AlertDialog.Builder(this)
+                    .setTitle("崩溃日志")
+                    .setMessage(log)
+                    .setPositiveButton("好的", null)
+                    .show()
+            }
         }
 
         maybeRequestNotificationPermission()
@@ -93,6 +112,16 @@ class MainActivity : AppCompatActivity() {
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
                 REQUEST_NOTIFICATION
             )
+        }
+    }
+
+    private fun readCrashLog(): String {
+        val dir = getExternalFilesDir(null) ?: filesDir
+        val file = File(dir, "crash.log")
+        return try {
+            if (file.exists()) file.readText() else ""
+        } catch (_: Exception) {
+            ""
         }
     }
 

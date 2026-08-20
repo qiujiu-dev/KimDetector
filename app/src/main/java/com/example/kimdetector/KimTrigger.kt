@@ -85,6 +85,11 @@ object KimTrigger {
         }
     }
 
+    /** 供界面「测试震动」按钮调用。 */
+    fun vibrateNow(context: Context) {
+        vibrate(context)
+    }
+
     private fun startMusic(context: Context) {
         val intent = Intent(context, MusicService::class.java)
         try {
@@ -167,10 +172,15 @@ object KimTrigger {
                     context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
                 val vibrator = manager?.defaultVibrator
                 if (vibrator != null && vibrator.hasVibrator()) {
-                    vibrator.vibrate(
-                        effect,
-                        VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
-                    )
+                    try {
+                        vibrator.vibrate(effect)
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "plain vibrate failed, try alarm usage", t)
+                        vibrator.vibrate(
+                            effect,
+                            VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
+                        )
+                    }
                     Log.i(TAG, "vibrate ok (VibratorManager)")
                     return
                 }

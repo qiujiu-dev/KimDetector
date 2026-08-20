@@ -70,6 +70,18 @@
             android:layout_height="wrap_content"
             android:text="@string/btn_test" />
 
+        <Button
+            android:id="@+id/btn_test_vibrate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_test_vibrate" />
+
+        <Button
+            android:id="@+id/btn_crash_log"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_crash_log" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

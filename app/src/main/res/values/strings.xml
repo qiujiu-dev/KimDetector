@@ -8,5 +8,7 @@
     <string name="btn_write_settings">授权修改系统设置</string>
     <string name="btn_overlay">授权显示在其他应用上层</string>
     <string name="btn_test">立即测试（模拟触发）</string>
+    <string name="btn_test_vibrate">测试震动</string>
+    <string name="btn_crash_log">查看崩溃日志</string>
     <string name="hint">使用步骤：① 授权「修改系统设置」；② 授权「显示在其他应用上层」；③ 开启无障碍服务；④ 点测试按钮验证。注意：只检测屏幕文字，认不出图片/视频里的人脸。图片右上角 ✕ 可关闭，关闭后 BGM 也会停。</string>
 </resources>
